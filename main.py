@@ -1,25 +1,17 @@
 import itertools
 import random
-from collections import namedtuple
-from random import choice
-import logging
-from statistics import mean, median
-import click
 from pprint import pprint
 
-M = 4  # code size
+from statistics import mean, median
+
+M = 4  # code length
 N = 7  # number of colors
-ALLOW_REPEATS = True  # allow repeats in code
-
-logging.basicConfig(level=logging.WARNING)
-
+ALLOW_REPEATS = True  # allow repeated colors in code
 
 if ALLOW_REPEATS:
     POOL = tuple(itertools.product(range(N), repeat=M))
 else:
     POOL = tuple(itertools.permutations(range(N), r=M))
-
-Response = namedtuple("Result", ("hits", "blows"))
 
 
 def check_guess(code, guess):
@@ -40,95 +32,83 @@ def check_guess(code, guess):
             guess[i] = -2
             blows += 1
 
-    return Response(hits, blows)
+    return hits, blows
 
 
-def get_rand_code(pool=POOL):
-    return choice(pool)
+def test():
+    # pick a code at random
+    code = random.choice(POOL)
+    # pools starts with all possible codes
+    current_pool = POOL
+    # let's keep track of each turn
+    turns = []
+    response = (0, 0)
+    # when the pool gets down to 1, we know the code
+    while response[0] < M:
+        # make a random guess out of the current pool
+        guess = random.choice(current_pool)
+        # see how we did, and keep track of the result
+        response = check_guess(code, guess)
+        turns.append({"guess": guess, "response": response, "pool": len(current_pool)})
+        # pare down the pool using the latest response
+        current_pool = [
+            code for code in current_pool if check_guess(code, guess) == response
+        ]
+    # double check we got it right
+    assert current_pool[0] == code
+    return {"code": code, "turns": turns}
 
 
-def get_first_code(pool=POOL):
-    return pool[0]
-
-
-def get_last_code(pool=POOL):
-    return pool[-1]
-
-
-def get_updated_pool(pool, guess, resp):
-    return tuple(code for code in pool if check_guess(code, guess) == resp)
-
-
-def test(n=1, strategy=get_rand_code):
-    games = []
-    for _ in range(n):
-        code = get_rand_code(POOL)
-        game = {"code": code, "turns": []}
-        pool = POOL
-        while len(pool) > 1:
-            guess = strategy(pool)
-            hits, blows = check_guess(code, guess)
-            pool = get_updated_pool(pool, guess, (hits, blows))
-
-            game["turns"].append(
-                {"guess": guess, "resp": (hits, blows), "new_pool_len": len(pool)}
-            )
-        assert pool[0] == code
-        games.append(game)
-    return games
+def test_stats(n=len(POOL)):
+    print("Testing...")
+    results = [test() for _ in range(n)]
+    n_guesses = [len(r["turns"]) for r in results]
+    print(
+        f"{n=}, {mean(n_guesses)=:.2f}, {median(n_guesses)=}, {max(n_guesses)=}, {min(n_guesses)=}"
+    )
 
 
 def play():
-    code = get_rand_code()
+    # play against the computer as codebreaker
+    code = random.choice(POOL)
     print("I have a code set")
     guesses = 0
     while True:
         guesses += 1
         guess = eval(input(f"Guess # {guesses}? "))
-        resp = check_guess(code, guess)
-        if resp.hits == M:
+        hits, blows = check_guess(code, guess)
+        if hits == M:
             print("that's right!")
             print(f"{guesses}")
             exit()
         else:
-            print(f"{resp.hits} Hits and {resp.blows} Blows")
+            print(f"{hits} Hits and {blows} Blows")
 
 
-def play_master(strat=get_rand_code):
-    pool = POOL
+def play_master():
+    # play against the computer as codemaster
+    current_pool = POOL
     guesses = 0
     print("Ready? ", end="")
-    while len(pool) > 1:
-        guess = strat(pool)
+    while len(current_pool) > 1:
         guesses += 1
+        guess = random.choice(current_pool)
         print(f"My guess is: {guess}")
         hits = int(input("Hits? "))
         blows = int(input("Blows? "))
-        if hits == 4:
+        if hits == M:
             print(f"I got it in {guesses}!")
             exit()
         else:
-            pool = get_updated_pool(pool, guess, (hits, blows))
+            current_pool = [
+                code
+                for code in current_pool
+                if check_guess(code, guess) == (hits, blows)
+            ]
 
-    print(f"I know! It's {pool[0]}")
-
-
-def test_strats(n=100):
-
-    strats = [get_rand_code, get_first_code, get_last_code]
-    for strat in strats:
-        test_strat(n, strat)
-
-
-def test_strat(strat, n=100):
-    results = test(n, strategy=strat)
-    print(strat.__name__)
-    n_guesses = [len(r["turns"]) for r in results]
-    print(
-        f"{mean(n_guesses)=},{median(n_guesses)=},{max(n_guesses)=},{min(n_guesses)=}"
-    )
-    print()
+    print(f"I know! It's {current_pool[0]}")
 
 
 if __name__ == "__main__":
-    test_strat(get_rand_code)
+    print(len(POOL))
+    pprint(test())
