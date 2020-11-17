@@ -1,6 +1,7 @@
 import itertools
 import random
 from pprint import pprint
+import numpy as np
 
 from statistics import mean, median
 
@@ -12,6 +13,11 @@ if ALLOW_REPEATS:
     POOL = tuple(itertools.product(range(N), repeat=M))
 else:
     POOL = tuple(itertools.permutations(range(N), r=M))
+
+
+def print_return(obj):
+    print(obj)
+    return obj
 
 
 def check_guess(code, guess):
@@ -35,28 +41,120 @@ def check_guess(code, guess):
     return hits, blows
 
 
-def test():
-    # pick a code at random
-    code = random.choice(POOL)
-    # pools starts with all possible codes
+def get_random_code():
+    return tuple(random.choice(range(N)) for _ in range(M))
+
+
+def get_best_guess(turns):
+    best = turns[0]
+    best_n = 0
+    for turn in turns:
+        n = sum(turn["response"])
+        if n > best_n:
+            best = turn["guess"]
+            best_n = n
+
+    return best
+
+
+def test(code=None):
+    if code is None:
+        code = random.choice(POOL)
     current_pool = POOL
-    # let's keep track of each turn
     turns = []
-    response = (0, 0)
-    # when the pool gets down to 1, we know the code
+    response = (-1, -1)
     while response[0] < M:
-        # make a random guess out of the current pool
         guess = random.choice(current_pool)
-        # see how we did, and keep track of the result
         response = check_guess(code, guess)
+        print(f"{guess=}, {response=}")
+
         turns.append({"guess": guess, "response": response, "pool": len(current_pool)})
-        # pare down the pool using the latest response
+        print(get_best_guess(turns))
         current_pool = [
             code for code in current_pool if check_guess(code, guess) == response
         ]
     # double check we got it right
     assert current_pool[0] == code
     return {"code": code, "turns": turns}
+
+
+def sim(c1, c2):
+    return sum([a == b for a, b in zip(c1, c2)])
+
+
+def test4(code=None):
+    if code is None:
+        code = random.choice(POOL)
+    current_pool = list(POOL)
+    turns = []
+    response = (-1, -1)
+    best_guess = random.choice(POOL)
+    while response[0] < M:
+        current_pool.sort(key=lambda c: sim(best_guess, c))
+        guess = current_pool[-1]
+        response = check_guess(code, guess)
+        print(f"{guess=}, {response=}")
+
+        turns.append({"guess": guess, "response": response, "pool": len(current_pool)})
+        print(get_best_guess(turns))
+        current_pool = [
+            code for code in current_pool if check_guess(code, guess) == response
+        ]
+    # double check we got it right
+    assert current_pool[0] == code
+    return {"code": code, "turns": turns}
+
+
+def test2():
+    # select code from the full pool at random
+    code = random.choice(POOL)
+    # let's keep track of each turn
+    turns = []
+
+    response = (-1, -1)
+    dont_try = []
+    while response[0] < M:
+        # make a random guess out of the current pool
+        done = False
+        while not done:
+
+            guess = get_random_code()
+            while guess in dont_try:
+                guess = get_random_code()
+
+            print(f"Should I try: {guess}?")
+            done = True
+            for turn in turns:
+                if check_guess(guess, turn["guess"]) != turn["response"]:
+                    dont_try.append(guess)
+                    print(f"nope, doesn't match: {turn}")
+                    done = False
+                    break
+                else:
+                    continue
+            if done:
+                print(f"{guess} looks good")
+                break
+        # see how we did, and keep track of the result
+        response = check_guess(code, guess)
+        turns.append({"guess": guess, "response": response})
+    # double check we got it right
+    assert guess == code
+    result = {"code": code, "turns": turns}
+    return result
+
+
+def test3():
+    code = random.choice(POOL)
+    turns = []
+    response = (-1, -1)
+    while response[0] < M:
+        guess = get_random_code()
+        response = check_guess(code, guess)
+        turns.append({"guess": guess, "response": response})
+    assert guess == code
+    result = {"code": code, "turns": turns}
+    return result
 
 
 def test_stats(n=len(POOL)):
@@ -110,5 +208,4 @@ def play_master():
 
 
 if __name__ == "__main__":
-    print(len(POOL))
-    pprint(test())
+    print(sorted(POOL, key=lambda c: sim((1, 2, 3, 4), c)))
